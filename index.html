@@ -337,7 +337,7 @@
     <div id="result"></div>
   </div>
 
-  <div class="footer">FinSight Loan Decider &mdash; Built with Flask, scikit-learn &amp; LangChain</div>
+  <div class="footer">FinSight Loan Decider &mdash; Built with Flask, scikit-learn, LangGraph &amp; Mistral AI</div>
 
   <script>
     const API_URL = 'https://fde-learning-lab-production.up.railway.app/score';
@@ -476,9 +476,27 @@
           const tier = data.risk_tier.toLowerCase();
           const prob = (data.default_probability * 100).toFixed(1);
 
-          let alertHtml = '';
+          let agentHtml = '';
+          if (data.credit_assessment) {
+            agentHtml +=
+              '<div style="margin-top:16px;padding:12px;background:#0a1a0f;border:1px solid #4caf50;border-radius:6px;">' +
+                '<div style="font-size:0.7rem;text-transform:uppercase;letter-spacing:1px;color:#4caf50;margin-bottom:6px;">🔍 Step 1 — Credit Assessment</div>' +
+                '<div style="font-size:0.85rem;line-height:1.6;color:#c8e6c9;">' + data.credit_assessment + '</div>' +
+              '</div>';
+          }
+          if (data.income_assessment) {
+            agentHtml +=
+              '<div style="margin-top:10px;padding:12px;background:#0a1200;border:1px solid #ff9800;border-radius:6px;">' +
+                '<div style="font-size:0.7rem;text-transform:uppercase;letter-spacing:1px;color:#ff9800;margin-bottom:6px;">💰 Step 2 — Income Verification</div>' +
+                '<div style="font-size:0.85rem;line-height:1.6;color:#ffe0b2;">' + data.income_assessment + '</div>' +
+              '</div>';
+          }
           if (data.alert_text) {
-            alertHtml = '<div class="alert-label">Credit Analyst Alert</div><div class="alert-box">' + data.alert_text + '</div>';
+            agentHtml +=
+              '<div style="margin-top:10px;padding:12px;background:#1a0a0a;border:1px solid #f44336;border-radius:6px;">' +
+                '<div style="font-size:0.7rem;text-transform:uppercase;letter-spacing:1px;color:#f44336;margin-bottom:6px;">⚠️ Step 3 — Final Analyst Note</div>' +
+                '<div style="font-size:0.85rem;line-height:1.6;color:#ffcccc;">' + data.alert_text + '</div>' +
+              '</div>';
           }
 
           resultDiv.innerHTML =
@@ -486,7 +504,7 @@
               '<span class="tier-badge">' + data.risk_tier + ' Risk</span>' +
               '<div class="prob">' + prob + '%</div>' +
               '<div class="prob-label">Estimated Default Probability</div>' +
-              alertHtml +
+              agentHtml +
             '</div>';
         }
 

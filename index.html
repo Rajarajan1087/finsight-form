@@ -98,6 +98,45 @@
       color: #555;
     }
 
+    /* Grade display */
+    .grade-display {
+      background: #0f1117;
+      border: 1px solid #2a2d3e;
+      border-radius: 6px;
+      padding: 10px 12px;
+      font-size: 0.9rem;
+      display: flex;
+      align-items: center;
+      gap: 10px;
+      min-height: 42px;
+    }
+
+    .grade-badge {
+      font-size: 1.1rem;
+      font-weight: 700;
+      width: 28px;
+      height: 28px;
+      border-radius: 50%;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      flex-shrink: 0;
+    }
+
+    .grade-A { background: #4caf50; color: #000; }
+    .grade-B { background: #8bc34a; color: #000; }
+    .grade-C { background: #ffeb3b; color: #000; }
+    .grade-D { background: #ff9800; color: #000; }
+    .grade-E { background: #ff5722; color: #fff; }
+    .grade-F { background: #f44336; color: #fff; }
+    .grade-G { background: #b71c1c; color: #fff; }
+    .grade-none { background: #2a2d3e; color: #555; }
+
+    .grade-desc {
+      font-size: 0.8rem;
+      color: #888;
+    }
+
     button {
       margin-top: 28px;
       width: 100%;
@@ -116,7 +155,6 @@
     button:hover { background: #81d4fa; }
     button:disabled { background: #2a2d3e; color: #555; cursor: not-allowed; }
 
-    /* Result */
     #result { margin-top: 28px; display: none; }
 
     .result-card {
@@ -284,17 +322,12 @@
           </select>
         </div>
         <div class="field">
-          <label>Loan Grade</label>
-          <select id="loan_grade" required>
-            <option value="">Select...</option>
-            <option>A</option>
-            <option>B</option>
-            <option>C</option>
-            <option>D</option>
-            <option>E</option>
-            <option>F</option>
-            <option>G</option>
-          </select>
+          <label>Loan Grade <span style="color:#555;font-size:0.7rem">(auto-calculated)</span></label>
+          <div class="grade-display">
+            <span class="grade-badge grade-none" id="gradeBadge">–</span>
+            <span class="grade-desc" id="gradeDesc">Fill in the fields above</span>
+          </div>
+          <input type="hidden" id="loan_grade" />
         </div>
       </div>
 
@@ -309,8 +342,104 @@
   <script>
     const API_URL = 'https://fde-learning-lab-production.up.railway.app/score';
 
-    document.getElementById('loanForm').addEventListener('submit', async (e) => {
+    const GRADE_DESCRIPTIONS = {
+      A: 'Excellent credit profile',
+      B: 'Good credit profile',
+      C: 'Moderate risk',
+      D: 'Medium-high risk',
+      E: 'High risk',
+      F: 'Very high risk',
+      G: 'Highest risk'
+    };
+
+    function calculateGrade() {
+      const income        = parseFloat(document.getElementById('person_income').value);
+      const loanAmnt      = parseFloat(document.getElementById('loan_amnt').value);
+      const intRate       = parseFloat(document.getElementById('loan_int_rate').value);
+      const credHist      = parseFloat(document.getElementById('cb_person_cred_hist_length').value);
+      const empLength     = parseFloat(document.getElementById('person_emp_length').value);
+      const defaultVal    = document.getElementById('cb_person_default_on_file').value;
+
+      if (!income || !loanAmnt || isNaN(intRate) || isNaN(credHist) || isNaN(empLength) || defaultVal === '') {
+        setGradeDisplay(null);
+        return null;
+      }
+
+      let score = 0;
+
+      // Prior default is the strongest negative signal
+      if (parseInt(defaultVal) === 1) score += 3;
+
+      // Interest rate bands
+      if (intRate >= 21)      score += 5;
+      else if (intRate >= 18) score += 4;
+      else if (intRate >= 15) score += 3;
+      else if (intRate >= 11) score += 2;
+      else if (intRate >= 8)  score += 1;
+
+      // Loan-to-income ratio
+      const lpi = loanAmnt / income;
+      if (lpi > 0.4)       score += 4;
+      else if (lpi > 0.3)  score += 3;
+      else if (lpi > 0.2)  score += 2;
+      else if (lpi > 0.1)  score += 1;
+
+      // Credit history length
+      if (credHist < 2)       score += 3;
+      else if (credHist < 5)  score += 2;
+      else if (credHist < 10) score += 1;
+
+      // Employment length
+      if (empLength < 2)      score += 2;
+      else if (empLength < 5) score += 1;
+
+      // Map score to grade
+      let grade;
+      if (score <= 1)       grade = 'A';
+      else if (score <= 3)  grade = 'B';
+      else if (score <= 5)  grade = 'C';
+      else if (score <= 7)  grade = 'D';
+      else if (score <= 9)  grade = 'E';
+      else if (score <= 11) grade = 'F';
+      else                  grade = 'G';
+
+      setGradeDisplay(grade);
+      document.getElementById('loan_grade').value = grade;
+      return grade;
+    }
+
+    function setGradeDisplay(grade) {
+      const badge = document.getElementById('gradeBadge');
+      const desc  = document.getElementById('gradeDesc');
+
+      badge.className = 'grade-badge';
+
+      if (!grade) {
+        badge.classList.add('grade-none');
+        badge.textContent = '–';
+        desc.textContent = 'Fill in the fields above';
+        return;
+      }
+
+      badge.classList.add('grade-' + grade);
+      badge.textContent = grade;
+      desc.textContent = GRADE_DESCRIPTIONS[grade];
+    }
+
+    ['person_income','loan_amnt','loan_int_rate','cb_person_cred_hist_length',
+     'person_emp_length','cb_person_default_on_file'].forEach(function(id) {
+      document.getElementById(id).addEventListener('input', calculateGrade);
+      document.getElementById(id).addEventListener('change', calculateGrade);
+    });
+
+    document.getElementById('loanForm').addEventListener('submit', async function(e) {
       e.preventDefault();
+
+      const grade = calculateGrade();
+      if (!grade) {
+        alert('Please fill in all fields so the loan grade can be calculated.');
+        return;
+      }
 
       const btn = document.getElementById('submitBtn');
       const resultDiv = document.getElementById('result');
@@ -329,7 +458,7 @@
         loan_amnt:                    parseFloat(document.getElementById('loan_amnt').value),
         loan_int_rate:                parseFloat(document.getElementById('loan_int_rate').value),
         loan_intent:                  document.getElementById('loan_intent').value,
-        loan_grade:                   document.getElementById('loan_grade').value,
+        loan_grade:                   grade,
       };
 
       try {
@@ -342,33 +471,29 @@
         const data = await res.json();
 
         if (!res.ok) {
-          resultDiv.innerHTML = `<div class="error-box"><strong>Error:</strong> ${data.error || 'Something went wrong.'}</div>`;
+          resultDiv.innerHTML = '<div class="error-box"><strong>Error:</strong> ' + (data.error || 'Something went wrong.') + '</div>';
         } else {
           const tier = data.risk_tier.toLowerCase();
           const prob = (data.default_probability * 100).toFixed(1);
 
           let alertHtml = '';
           if (data.alert_text) {
-            alertHtml = `
-              <div class="alert-label">Credit Analyst Alert</div>
-              <div class="alert-box">${data.alert_text}</div>
-            `;
+            alertHtml = '<div class="alert-label">Credit Analyst Alert</div><div class="alert-box">' + data.alert_text + '</div>';
           }
 
-          resultDiv.innerHTML = `
-            <div class="result-card ${tier}">
-              <span class="tier-badge">${data.risk_tier} Risk</span>
-              <div class="prob">${prob}%</div>
-              <div class="prob-label">Estimated Default Probability</div>
-              ${alertHtml}
-            </div>
-          `;
+          resultDiv.innerHTML =
+            '<div class="result-card ' + tier + '">' +
+              '<span class="tier-badge">' + data.risk_tier + ' Risk</span>' +
+              '<div class="prob">' + prob + '%</div>' +
+              '<div class="prob-label">Estimated Default Probability</div>' +
+              alertHtml +
+            '</div>';
         }
 
         resultDiv.style.display = 'block';
 
       } catch (err) {
-        resultDiv.innerHTML = `<div class="error-box"><strong>Network Error:</strong> Could not reach the API. Please try again.</div>`;
+        resultDiv.innerHTML = '<div class="error-box"><strong>Network Error:</strong> Could not reach the API. Please try again.</div>';
         resultDiv.style.display = 'block';
       }
 
